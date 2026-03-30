@@ -211,6 +211,9 @@ jobs:
         UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
         VERSION: ${{ steps.version.outputs.VERSION }}
       run: |
+        # 提取基础 URL (去掉 {?name,label})
+        BASE_URL=$(echo "$UPLOAD_URL" | sed 's/{.*}//')
+        
         # 查找所有 APK 文件
         for apk in ./artifacts/*.apk; do
           if [ -f "$apk" ]; then
@@ -230,10 +233,11 @@ jobs:
             
             # 上传文件
             curl -s -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Content-Type: application/vnd.android.package-archive" \
+              -H "Accept: application/vnd.github+json" \
               --data-binary @$apk \
-              "${UPLOAD_URL}?name=${asset_name}"
+              "${BASE_URL}?name=$(echo "$asset_name" | jq -sRr @uri)"
             
             echo "Uploaded: $asset_name"
           fi
