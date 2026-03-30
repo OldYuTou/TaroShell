@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, master ]
     paths:
-      - 'mobile-client/**'
+      - 'kimi-remote-control-v2/mobile-client/**'
       - '.github/workflows/**'
   pull_request:
     branches: [ main, master ]
     paths:
-      - 'mobile-client/**'
+      - 'kimi-remote-control-v2/mobile-client/**'
   workflow_dispatch:  # 允许手动触发
     inputs:
       version:
@@ -61,25 +61,25 @@ jobs:
     
     # 获取依赖
     - name: Get Flutter dependencies
-      working-directory: ./mobile-client
+      working-directory: ./kimi-remote-control-v2/mobile-client
       run: |
         flutter pub get
     
     # 分析代码
     - name: Analyze code
-      working-directory: ./mobile-client
+      working-directory: ./kimi-remote-control-v2/mobile-client
       run: flutter analyze
       continue-on-error: true  # 不中断构建，但会显示警告
     
     # 运行测试
     - name: Run tests
-      working-directory: ./mobile-client
+      working-directory: ./kimi-remote-control-v2/mobile-client
       run: flutter test
       continue-on-error: true
     
     # 构建 APK (分 ABI 构建，减小体积)
     - name: Build APK (split per ABI)
-      working-directory: ./mobile-client
+      working-directory: ./kimi-remote-control-v2/mobile-client
       run: |
         flutter build apk --split-per-abi --release
         # 也构建一个通用版本
@@ -89,10 +89,10 @@ jobs:
     - name: Show build outputs
       run: |
         echo "=== 构建输出 ==="
-        ls -lh mobile-client/build/app/outputs/flutter-apk/
+        ls -lh kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/
         echo ""
         echo "=== APK 文件信息 ==="
-        for apk in mobile-client/build/app/outputs/flutter-apk/*.apk; do
+        for apk in kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/*.apk; do
           echo "文件: $apk"
           ls -lh "$apk"
         done
@@ -102,7 +102,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: kimi-remote-apk-universal
-        path: mobile-client/build/app/outputs/flutter-apk/app-release.apk
+        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
     
     # 上传构建产物 - ARM64
@@ -110,7 +110,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: kimi-remote-apk-arm64
-        path: mobile-client/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
         retention-days: 30
     
     # 上传构建产物 - ARM32
@@ -118,7 +118,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: kimi-remote-apk-arm32
-        path: mobile-client/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
         retention-days: 30
 
   release:
@@ -142,7 +142,7 @@ jobs:
     - name: Show downloaded artifacts
       run: |
         echo "=== 下载的构建产物 ==="
-        find ./artifacts -name "*.apk" -exec ls -lh {} \;
+        ls -lhR ./artifacts
     
     # 生成版本号
     - name: Generate version
