@@ -212,7 +212,7 @@ class RemoteBloc extends Bloc<RemoteEvent, RemoteState> {
 
   @override
   Future<void> close() async {
-    await _webSocket?.dispose();
+    _webSocket?.dispose();
     return super.close();
   }
 }
