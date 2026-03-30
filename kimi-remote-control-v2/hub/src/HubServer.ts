@@ -435,3 +435,4 @@ export class HubServer extends EventEmitter {
   getPushManager() {
     return pushManager;
   }
+}
