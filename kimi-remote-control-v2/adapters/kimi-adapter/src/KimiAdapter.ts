@@ -93,12 +93,27 @@ export class KimiAdapter extends BaseAdapter {
   // ============ Hub 连接 ============
   
   protected onHubConnect(): void {
-    console.log('[KimiAdapter] Hub connected, starting Kimi CLI...');
-    this.startKimiProcess();
+    console.log('[KimiAdapter] Hub connected');
+    // 只在 Kimi 未运行时才启动
+    if (!this.kimiProcess) {
+      this.startKimiProcess();
+    } else {
+      console.log('[KimiAdapter] Kimi already running, skipping start');
+    }
   }
   
   protected onHubDisconnect(): void {
     console.log('[KimiAdapter] Hub disconnected');
+    // Hub 断开时停止 Kimi 进程
+    if (this.kimiProcess) {
+      console.log('[KimiAdapter] Stopping Kimi process due to Hub disconnect');
+      this.kimiProcess.kill();
+      this.kimiProcess = null;
+    }
+    if (this.kimiWs) {
+      this.kimiWs.close();
+      this.kimiWs = null;
+    }
   }
   
   // ============ Kimi 进程管理 ============
@@ -139,9 +154,16 @@ export class KimiAdapter extends BaseAdapter {
       console.log(`[KimiAdapter] Kimi process exited with code ${code}`);
       this.kimiProcess = null;
       
-      // 尝试重启
-      if (this.getStatus() === 'connected') {
-        setTimeout(() => this.startKimiProcess(), 5000);
+      // 只有在 Hub 仍连接且非正常退出时才尝试重启
+      const hubConnected = this.getStatus() === 'connected';
+      if (hubConnected && code !== 0) {
+        console.log('[KimiAdapter] Restarting Kimi in 5 seconds...');
+        setTimeout(() => {
+          const stillConnected = this.getStatus() === 'connected';
+          if (stillConnected && !this.kimiProcess) {
+            this.startKimiProcess();
+          }
+        }, 5000);
       }
     });
   }
