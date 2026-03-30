@@ -17,6 +17,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _userIdController = TextEditingController();
 
   bool _isConnected = false;
+  String? _errorMessage;
+  String _statusMessage = '未连接';
+  List<String> _logs = [];
+  
+  // 最大日志条数
+  static const int _maxLogs = 50;
 
   @override
   void initState() {
@@ -52,16 +58,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     context.read<RemoteBloc>().add(DisconnectEvent());
   }
 
+  void _addLog(String log) {
+    setState(() {
+      _logs.add('[${DateTime.now().toString().substring(11, 19)}] $log');
+      if (_logs.length > _maxLogs) {
+        _logs.removeAt(0);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('设置'),
+        title: const Text('连接设置'),
       ),
       body: BlocListener<RemoteBloc, RemoteState>(
         listener: (context, state) {
           setState(() {
-            _isConnected = state is RemoteConnected;
+            if (state is RemoteInitial) {
+              _isConnected = false;
+              _statusMessage = '未连接';
+              _errorMessage = null;
+            } else if (state is RemoteConnecting) {
+              _isConnected = false;
+              _statusMessage = '正在连接...';
+              _errorMessage = null;
+              _addLog('正在连接到服务器...');
+            } else if (state is RemoteConnected) {
+              _isConnected = true;
+              _statusMessage = '已连接';
+              _errorMessage = null;
+              _addLog('连接成功！');
+            } else if (state is RemoteDisconnected) {
+              _isConnected = false;
+              _statusMessage = '已断开';
+              _addLog('连接已断开');
+            } else if (state is RemoteError) {
+              _isConnected = false;
+              _statusMessage = '连接失败';
+              _errorMessage = state.message;
+              _addLog('错误: ${state.message}');
+            }
           });
         },
         child: Padding(
@@ -73,15 +111,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 // 连接状态
                 Card(
-                  child: ListTile(
-                    leading: Icon(
-                      _isConnected ? Icons.cloud_done : Icons.cloud_off,
-                      color: _isConnected ? Colors.green : Colors.grey,
-                    ),
-                    title: Text(_isConnected ? '已连接' : '未连接'),
-                    subtitle: Text(_isConnected
-                        ? '正在接收 Kimi 通知'
-                        : '请配置并连接到服务器'),
+                  color: _isConnected ? Colors.green[50] : (_errorMessage != null ? Colors.red[50] : null),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          _isConnected ? Icons.cloud_done : (_errorMessage != null ? Icons.error : Icons.cloud_off),
+                          color: _isConnected ? Colors.green : (_errorMessage != null ? Colors.red : Colors.grey),
+                          size: 32,
+                        ),
+                        title: Text(
+                          _statusMessage,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _isConnected ? Colors.green[700] : (_errorMessage != null ? Colors.red[700] : null),
+                          ),
+                        ),
+                        subtitle: Text(_isConnected
+                            ? '正在接收 Kimi 通知'
+                            : (_errorMessage ?? '请配置并连接到服务器')),
+                      ),
+                      if (_errorMessage != null)
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '错误详情: $_errorMessage',
+                            style: TextStyle(color: Colors.red[600], fontSize: 12),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -141,20 +200,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 16),
+                
+                // 调试日志
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '连接日志',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setState(() => _logs.clear()),
+                      icon: const Icon(Icons.clear, size: 16),
+                      label: const Text('清除'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: _logs.length,
+                    itemBuilder: (context, index) {
+                      return Text(
+                        _logs[index],
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: _logs[index].contains('错误') || _logs[index].contains('失败')
+                              ? Colors.red
+                              : _logs[index].contains('成功')
+                                  ? Colors.green
+                                  : Colors.black87,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 24),
 
                 // 使用说明
                 const Text(
                   '使用说明',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '1. 在电脑端启动 Kimi CLI 并配置推送服务插件\n'
-                  '2. 部署推送服务器（Node.js 服务）\n'
-                  '3. 在手机端配置相同的服务器地址和用户ID\n'
-                  '4. 点击连接，即可接收 Kimi 通知',
-                  style: TextStyle(color: Colors.grey, height: 1.5),
+                  '1. 确保手机和电脑在同一 WiFi 网络\n'
+                  '2. 在电脑端运行 start-all.bat 启动服务\n'
+                  '3. 输入电脑的 IP 地址（如 ws://192.168.1.5:8081）\n'
+                  '4. 点击连接按钮',
+                  style: TextStyle(color: Colors.grey, height: 1.5, fontSize: 13),
                 ),
               ],
             ),

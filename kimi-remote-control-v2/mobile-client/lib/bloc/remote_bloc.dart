@@ -125,6 +125,11 @@ class RemoteBloc extends Bloc<RemoteEvent, RemoteState> {
       }
     });
 
+    // 监听错误
+    _webSocket!.errorStream.listen((error) {
+      emit(RemoteError(error));
+    });
+
     // 监听 Kimi 事件
     _webSocket!.eventStream.listen((kimiEvent) {
       add(KimiEventReceived(kimiEvent));
@@ -142,10 +147,14 @@ class RemoteBloc extends Bloc<RemoteEvent, RemoteState> {
 
     await _webSocket!.connect();
 
+    // 等待连接建立（最多5秒）
+    await Future.delayed(const Duration(seconds: 2));
+
     if (_webSocket!.isConnected) {
       emit(RemoteConnected());
     } else {
-      emit(RemoteError('连接失败'));
+      final lastError = _webSocket!.lastError;
+      emit(RemoteError(lastError ?? '连接失败：无法连接到服务器，请检查地址和网络'));
     }
   }
 
