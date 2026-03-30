@@ -105,10 +105,7 @@ class WebSocketService {
 
   /// 注册设备
   void _register() {
-    if (!isConnected) {
-      _log('Cannot register: not connected');
-      return;
-    }
+    _log('Registering device...');
     
     final registerMsg = {
       'type': 'register',
@@ -121,13 +118,14 @@ class WebSocketService {
         'supportedCommands': ['message.send', 'approval.respond'],
       },
     };
-    _log('Sending register message...');
+    _log('Sending register: $registerMsg');
     _send(registerMsg);
+    _log('Register message sent');
     
     // 设置超时检查
     Future.delayed(const Duration(seconds: 5), () {
       if (_state == ConnectionState.connecting) {
-        _setError('Registration timeout - no response from server');
+        _setError('服务器没有响应注册请求，请检查服务器日志');
         _setState(ConnectionState.error);
       }
     });
@@ -135,8 +133,15 @@ class WebSocketService {
 
   /// 发送消息到服务器
   void _send(Map<String, dynamic> message) {
-    if (_channel != null && isConnected) {
-      _channel!.sink.add(jsonEncode(message));
+    if (_channel != null) {
+      try {
+        _channel!.sink.add(jsonEncode(message));
+        _log('Sent: ${message['type']}');
+      } catch (e) {
+        _log('Send error: $e');
+      }
+    } else {
+      _log('Cannot send: channel is null');
     }
   }
 
