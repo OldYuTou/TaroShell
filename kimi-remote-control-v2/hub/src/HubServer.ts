@@ -257,7 +257,9 @@ export class HubServer extends EventEmitter {
       
       socket.on('message', (data) => {
         try {
-          const message = JSON.parse(data.toString());
+          const rawMessage = data.toString();
+          console.log(`[Hub] Received from ${clientId}: ${rawMessage.substring(0, 200)}`);
+          const message = JSON.parse(rawMessage);
           this.handleWebSocketMessage(clientId, socket, message, adapterInfo);
         } catch (err) {
           console.error(`[Hub] Invalid message from ${clientId}:`, err);

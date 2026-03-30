@@ -87,7 +87,7 @@ class WebSocketService {
 
   /// 注册设备
   void _register() {
-    _send({
+    final registerMsg = {
       'type': 'register',
       'payload': {
         'adapterName': 'mobile_client',
@@ -97,7 +97,9 @@ class WebSocketService {
         'supportedEvents': ['message.stream', 'message.complete', 'task.complete', 'approval.request'],
         'supportedCommands': ['message.send', 'approval.respond'],
       },
-    });
+    };
+    print('[WebSocket] Sending register: $registerMsg');
+    _send(registerMsg);
   }
 
   /// 发送消息到服务器
@@ -151,24 +153,28 @@ class WebSocketService {
   /// 消息处理
   void _onMessage(dynamic message) {
     try {
+      print('[WebSocket] Received: ${message.toString().substring(0, message.toString().length > 200 ? 200 : message.toString().length)}');
       final data = jsonDecode(message as String);
       _handleMessage(data);
     } catch (e) {
-      print('WebSocket message error: $e');
+      print('[WebSocket] Message error: $e');
     }
   }
 
   /// 处理消息
   void _handleMessage(Map<String, dynamic> data) {
     final type = data['type'];
+    print('[WebSocket] Handling type: $type');
 
     switch (type) {
       case 'connected':
+        print('[WebSocket] Got connected, clientId: ${data['clientId']}');
         _deviceId = data['clientId'] ?? data['deviceId'];
         _register();
         break;
 
       case 'registered':
+        print('[WebSocket] Got registered');
         _setState(ConnectionState.connected);
         break;
 

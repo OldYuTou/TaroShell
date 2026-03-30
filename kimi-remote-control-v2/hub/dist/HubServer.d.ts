@@ -38,6 +38,6 @@ export declare class HubServer extends EventEmitter {
     private sendPushNotification;
     private isMobileClient;
     getAdapterManager(): AdapterManager;
-    getPushManager(): any;
+    getPushManager(): import("@ai-remote/adapter-sdk").PushServiceManager;
 }
 export {};
