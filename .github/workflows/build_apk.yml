@@ -88,38 +88,20 @@ jobs:
     # 显示构建输出
     - name: Show build outputs
       run: |
-        echo "=== 构建输出 ==="
-        ls -lh kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/
+        echo "=== 构建输出目录 ==="
+        find kimi-remote-control-v2/mobile-client/build -name "*.apk" -type f
         echo ""
-        echo "=== APK 文件信息 ==="
-        for apk in kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/*.apk; do
-          echo "文件: $apk"
-          ls -lh "$apk"
-        done
+        echo "=== 文件详情 ==="
+        ls -lhR kimi-remote-control-v2/mobile-client/build/app/outputs/ || true
     
-    # 上传构建产物 - 通用 APK
-    - name: Upload APK (Universal)
+    # 上传构建产物 - 所有 APK
+    - name: Upload APKs
       uses: actions/upload-artifact@v4
       with:
-        name: kimi-remote-apk-universal
-        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-release.apk
+        name: kimi-remote-apks
+        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/*.apk
         retention-days: 30
-    
-    # 上传构建产物 - ARM64
-    - name: Upload APK (ARM64)
-      uses: actions/upload-artifact@v4
-      with:
-        name: kimi-remote-apk-arm64
-        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-        retention-days: 30
-    
-    # 上传构建产物 - ARM32
-    - name: Upload APK (ARM32)
-      uses: actions/upload-artifact@v4
-      with:
-        name: kimi-remote-apk-arm32
-        path: kimi-remote-control-v2/mobile-client/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-        retention-days: 30
+        if-no-files-found: warn
 
   release:
     name: Create Release
@@ -133,9 +115,10 @@ jobs:
       uses: actions/checkout@v4
     
     # 下载构建产物
-    - name: Download all artifacts
+    - name: Download APK artifacts
       uses: actions/download-artifact@v4
       with:
+        name: kimi-remote-apks
         path: ./artifacts
     
     # 显示下载的文件
@@ -143,6 +126,9 @@ jobs:
       run: |
         echo "=== 下载的构建产物 ==="
         ls -lhR ./artifacts
+        echo ""
+        echo "=== APK 文件列表 ==="
+        find ./artifacts -name "*.apk" -type f -exec ls -lh {} \;
     
     # 生成版本号
     - name: Generate version
@@ -213,35 +199,37 @@ jobs:
         draft: false
         prerelease: false
     
-    # 上传通用 APK 到 Release
-    - name: Upload Universal APK to Release
-      uses: actions/upload-release-asset@v1
+    # 上传所有 APK 到 Release
+    - name: Upload APKs to Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/kimi-remote-apk-universal/app-release.apk
-        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-universal.apk
-        asset_content_type: application/vnd.android.package-archive
-    
-    # 上传 ARM64 APK
-    - name: Upload ARM64 APK to Release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/kimi-remote-apk-arm64/app-arm64-v8a-release.apk
-        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-arm64.apk
-        asset_content_type: application/vnd.android.package-archive
-    
-    # 上传 ARM32 APK
-    - name: Upload ARM32 APK to Release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/kimi-remote-apk-arm32/app-armeabi-v7a-release.apk
-        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-arm32.apk
-        asset_content_type: application/vnd.android.package-archive
+        UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
+        VERSION: ${{ steps.version.outputs.VERSION }}
+      run: |
+        # 查找所有 APK 文件
+        for apk in ./artifacts/*.apk; do
+          if [ -f "$apk" ]; then
+            filename=$(basename "$apk")
+            echo "Uploading: $filename"
+            
+            # 确定 asset_name
+            if [[ "$filename" == *"arm64-v8a"* ]]; then
+              asset_name="KimiRemote-v${VERSION}-arm64.apk"
+            elif [[ "$filename" == *"armeabi-v7a"* ]]; then
+              asset_name="KimiRemote-v${VERSION}-arm32.apk"
+            elif [[ "$filename" == "app-release.apk" ]]; then
+              asset_name="KimiRemote-v${VERSION}-universal.apk"
+            else
+              asset_name="KimiRemote-v${VERSION}-${filename}"
+            fi
+            
+            # 上传文件
+            curl -s -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/vnd.android.package-archive" \
+              --data-binary @$apk \
+              "${UPLOAD_URL}?name=${asset_name}"
+            
+            echo "Uploaded: $asset_name"
+          fi
+        done
