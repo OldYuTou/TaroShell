@@ -21,6 +21,11 @@ env:
   FLUTTER_VERSION: '3.16.0'
   JAVA_VERSION: '17'
 
+permissions:
+  contents: write
+  actions: read
+  checks: read
+
 jobs:
   build:
     name: Build APK
