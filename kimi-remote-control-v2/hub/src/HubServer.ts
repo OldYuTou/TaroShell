@@ -367,6 +367,43 @@ export class HubServer extends EventEmitter {
         }
         break;
         
+      case 'mobile_request':
+        // 手机客户端发送的请求
+        if (adapterInfo) {
+          this.adapterManager.updatePing(adapterInfo.id);
+          const requestPayload = message.payload || message;
+          const action = requestPayload.action || 'unknown';
+          
+          console.log(`[Hub] Mobile request: ${action} from ${adapterInfo.deviceName}`);
+          
+          // 转发给用户的 Kimi 适配器
+          const kimiAdapters = this.adapterManager
+            .getUserAdapters(adapterInfo.userId)
+            .filter(a => a.name === 'kimi');
+          
+          if (kimiAdapters.length === 0) {
+            socket.send(JSON.stringify({
+              type: 'error',
+              message: 'No Kimi adapter found for this user',
+            }));
+          } else {
+            for (const target of kimiAdapters) {
+              target.socket.send(JSON.stringify({
+                type: 'mobile_request',
+                payload: requestPayload,
+                fromDevice: adapterInfo.deviceName,
+              }));
+            }
+            
+            // 确认收到请求
+            socket.send(JSON.stringify({
+              type: 'request_received',
+              action: action,
+            }));
+          }
+        }
+        break;
+        
       case 'ping':
         // 心跳
         if (adapterInfo) {
