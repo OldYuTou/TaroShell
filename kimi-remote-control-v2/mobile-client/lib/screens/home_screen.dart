@@ -261,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // 从设置中读取并连接
     // 简化实现，实际应从 SharedPreferences 读取
     context.read<RemoteBloc>().add(ConnectEvent(
-      serverUrl: 'ws://localhost:8081',
+      serverUrl: 'ws://192.168.100.4:8081',
       userId: 'default_user',
     ));
   }

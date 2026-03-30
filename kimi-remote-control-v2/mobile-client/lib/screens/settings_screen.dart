@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _serverController.text = prefs.getString('server_url') ?? 'ws://localhost:8081';
+      _serverController.text = prefs.getString('server_url') ?? 'ws://192.168.100.4:8081';
       _userIdController.text = prefs.getString('user_id') ?? '';
     });
   }
