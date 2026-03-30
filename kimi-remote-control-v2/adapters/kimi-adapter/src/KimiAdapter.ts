@@ -64,6 +64,7 @@ export class KimiAdapter extends BaseAdapter {
   private kimiWs: WebSocket | null = null;
   private pendingApprovals: Map<string, any> = new Map();
   private sessionId: string | null = null;
+  private _isStartingKimi: boolean = false; // 防止重复启动标志
   
   // ============ 生命周期 ============
   
@@ -94,12 +95,16 @@ export class KimiAdapter extends BaseAdapter {
   
   protected onHubConnect(): void {
     console.log('[KimiAdapter] Hub connected');
-    // 只在 Kimi 未运行时才启动
-    if (!this.kimiProcess) {
-      this.startKimiProcess();
-    } else {
+    // 只在 Kimi 未运行且不在启动中时才启动
+    if (this.kimiProcess) {
       console.log('[KimiAdapter] Kimi already running, skipping start');
+      return;
     }
+    if (this._isStartingKimi) {
+      console.log('[KimiAdapter] Kimi is already starting, skipping');
+      return;
+    }
+    this.startKimiProcess();
   }
   
   protected onHubDisconnect(): void {
@@ -119,6 +124,14 @@ export class KimiAdapter extends BaseAdapter {
   // ============ Kimi 进程管理 ============
   
   private startKimiProcess(): void {
+    // 防止重复启动
+    if (this._isStartingKimi || this.kimiProcess) {
+      console.log('[KimiAdapter] Already starting or running, skip');
+      return;
+    }
+    
+    this._isStartingKimi = true;
+    
     const config = this.getConfig()?.toolConfig;
     const kimiPath = config?.kimiPath || 'kimi';
     const workDir = config?.workDir;
@@ -130,19 +143,29 @@ export class KimiAdapter extends BaseAdapter {
     
     console.log(`[KimiAdapter] Starting: ${kimiPath} ${args.join(' ')}`);
     
-    this.kimiProcess = spawn(kimiPath, args, {
-      cwd: workDir,
-      env: { ...process.env, ...config?.env },
-    });
+    try {
+      this.kimiProcess = spawn(kimiPath, args, {
+        cwd: workDir,
+        env: { ...process.env, ...config?.env },
+      });
+    } catch (e) {
+      console.error('[KimiAdapter] Failed to start Kimi:', e);
+      this._isStartingKimi = false;
+      return;
+    }
     
+    let wsUrlFound = false;
     this.kimiProcess.stdout?.on('data', (data) => {
       const output = data.toString();
       console.log('[Kimi stdout]', output.trim());
       
-      // 解析 WebSocket URL
-      const wsMatch = output.match(/ws:\/\/[^\s]+/);
-      if (wsMatch && !this.kimiWs) {
-        this.connectToKimi(wsMatch[0]);
+      // 解析 WebSocket URL（只处理第一次）
+      if (!wsUrlFound) {
+        const wsMatch = output.match(/ws:\/\/[^\s]+/);
+        if (wsMatch) {
+          wsUrlFound = true;
+          this.connectToKimi(wsMatch[0]);
+        }
       }
     });
     
@@ -153,6 +176,7 @@ export class KimiAdapter extends BaseAdapter {
     this.kimiProcess.on('close', (code) => {
       console.log(`[KimiAdapter] Kimi process exited with code ${code}`);
       this.kimiProcess = null;
+      this._isStartingKimi = false;
       
       // 只有在 Hub 仍连接且非正常退出时才尝试重启
       const hubConnected = this.getStatus() === 'connected';
@@ -160,7 +184,7 @@ export class KimiAdapter extends BaseAdapter {
         console.log('[KimiAdapter] Restarting Kimi in 5 seconds...');
         setTimeout(() => {
           const stillConnected = this.getStatus() === 'connected';
-          if (stillConnected && !this.kimiProcess) {
+          if (stillConnected && !this.kimiProcess && !this._isStartingKimi) {
             this.startKimiProcess();
           }
         }, 5000);
