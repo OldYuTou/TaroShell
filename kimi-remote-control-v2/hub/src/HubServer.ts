@@ -422,7 +422,7 @@ export class HubServer extends EventEmitter {
   private startTimers(): void {
     // 清理不活跃的适配器
     const cleanupTimer = setInterval(() => {
-      const stale = this.adapterManager.cleanupStaleAdapters(120000);
+      const stale = this.adapterManager.cleanupStaleAdapters(300000); // 5分钟不活跃才清理
       if (stale.length > 0) {
         console.log(`[Hub] Cleaned up ${stale.length} stale adapters`);
       }

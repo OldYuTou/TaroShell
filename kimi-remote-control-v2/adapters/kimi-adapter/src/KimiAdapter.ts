@@ -65,6 +65,7 @@ export class KimiAdapter extends BaseAdapter {
   private pendingApprovals: Map<string, any> = new Map();
   private sessionId: string | null = null;
   private _isStartingKimi: boolean = false; // 防止重复启动标志
+  private _keepAliveTimer: NodeJS.Timeout | null = null;
   
   // ============ 生命周期 ============
   
@@ -105,10 +106,29 @@ export class KimiAdapter extends BaseAdapter {
       return;
     }
     this.startKimiProcess();
+    
+    // 启动心跳定时器，保持活跃
+    this._startKeepAlive();
+  }
+  
+  private _startKeepAlive(): void {
+    this._keepAliveTimer = setInterval(() => {
+      // 发送一个空事件来保持活跃
+      this.sendEvent('system.notification', {
+        title: 'ping',
+        description: 'keepalive',
+      });
+      console.log('[KimiAdapter] Keepalive ping sent');
+    }, 30000); // 每30秒
   }
   
   protected onHubDisconnect(): void {
     console.log('[KimiAdapter] Hub disconnected');
+    // 停止心跳
+    if (this._keepAliveTimer) {
+      clearInterval(this._keepAliveTimer);
+      this._keepAliveTimer = null;
+    }
     // Hub 断开时停止 Kimi 进程
     if (this.kimiProcess) {
       console.log('[KimiAdapter] Stopping Kimi process due to Hub disconnect');
@@ -173,21 +193,28 @@ export class KimiAdapter extends BaseAdapter {
       console.error('[Kimi stderr]', data.toString().trim());
     });
     
-    this.kimiProcess.on('close', (code) => {
-      console.log(`[KimiAdapter] Kimi process exited with code ${code}`);
+    this.kimiProcess.on('close', (code, signal) => {
+      console.log(`[KimiAdapter] Kimi process exited with code ${code}, signal ${signal}`);
       this.kimiProcess = null;
       this._isStartingKimi = false;
       
       // 只有在 Hub 仍连接且非正常退出时才尝试重启
       const hubConnected = this.getStatus() === 'connected';
-      if (hubConnected && code !== 0) {
+      const shouldRestart = hubConnected && code !== 0 && code !== null;
+      
+      console.log(`[KimiAdapter] Hub connected: ${hubConnected}, should restart: ${shouldRestart}`);
+      
+      if (shouldRestart) {
         console.log('[KimiAdapter] Restarting Kimi in 5 seconds...');
         setTimeout(() => {
           const stillConnected = this.getStatus() === 'connected';
+          console.log(`[KimiAdapter] Checking restart: stillConnected=${stillConnected}, hasProcess=${!!this.kimiProcess}, isStarting=${this._isStartingKimi}`);
           if (stillConnected && !this.kimiProcess && !this._isStartingKimi) {
             this.startKimiProcess();
           }
         }, 5000);
+      } else {
+        console.log('[KimiAdapter] Not restarting Kimi');
       }
     });
   }
