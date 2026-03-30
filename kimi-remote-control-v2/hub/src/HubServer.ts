@@ -296,24 +296,34 @@ export class HubServer extends EventEmitter {
     switch (msgType) {
       case 'register':
         // 注册适配器
-        const registerPayload = message.payload;
-        adapterInfo = this.adapterManager.registerAdapter({
-          id: clientId,
-          name: registerPayload.adapterName,
-          version: registerPayload.adapterVersion,
-          userId: registerPayload.userId,
-          deviceName: registerPayload.deviceName,
-          supportedEvents: registerPayload.supportedEvents,
-          supportedCommands: registerPayload.supportedCommands,
-          socket,
-        });
-        
-        // 发送注册确认
-        socket.send(JSON.stringify({
-          type: 'registered',
-          adapterId: clientId,
-          adapterName: registerPayload.adapterName,
-        }));
+        try {
+          const registerPayload = message.payload || {};
+          adapterInfo = this.adapterManager.registerAdapter({
+            id: clientId,
+            name: registerPayload.adapterName || 'unknown',
+            version: registerPayload.adapterVersion || '1.0.0',
+            userId: registerPayload.userId || 'default_user',
+            deviceName: registerPayload.deviceName || 'Unknown Device',
+            supportedEvents: registerPayload.supportedEvents || [],
+            supportedCommands: registerPayload.supportedCommands || [],
+            socket,
+          });
+          
+          console.log(`[Hub] Adapter registered: ${adapterInfo.name} (${clientId}) for user ${adapterInfo.userId}`);
+          
+          // 发送注册确认
+          socket.send(JSON.stringify({
+            type: 'registered',
+            adapterId: clientId,
+            adapterName: adapterInfo.name,
+          }));
+        } catch (err) {
+          console.error(`[Hub] Register error:`, err);
+          socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Registration failed: ' + String(err),
+          }));
+        }
         break;
         
       case 'event':

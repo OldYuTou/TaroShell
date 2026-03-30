@@ -164,7 +164,7 @@ class WebSocketService {
 
     switch (type) {
       case 'connected':
-        _deviceId = data['deviceId'];
+        _deviceId = data['clientId'] ?? data['deviceId'];
         _register();
         break;
 
