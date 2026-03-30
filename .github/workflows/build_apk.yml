@@ -207,13 +207,9 @@ jobs:
     # 上传所有 APK 到 Release
     - name: Upload APKs to Release
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         VERSION: ${{ steps.version.outputs.VERSION }}
       run: |
-        # 提取基础 URL (去掉 {?name,label})
-        BASE_URL=$(echo "$UPLOAD_URL" | sed 's/{.*}//')
-        
         # 查找所有 APK 文件
         for apk in ./artifacts/*.apk; do
           if [ -f "$apk" ]; then
@@ -231,13 +227,8 @@ jobs:
               asset_name="KimiRemote-v${VERSION}-${filename}"
             fi
             
-            # 上传文件
-            curl -s -X POST \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Content-Type: application/vnd.android.package-archive" \
-              -H "Accept: application/vnd.github+json" \
-              --data-binary @$apk \
-              "${BASE_URL}?name=$(echo "$asset_name" | jq -sRr @uri)"
+            # 使用 gh CLI 上传
+            gh release upload "v${VERSION}" "$apk" --clobber --repo "$GITHUB_REPOSITORY"
             
             echo "Uploaded: $asset_name"
           fi
