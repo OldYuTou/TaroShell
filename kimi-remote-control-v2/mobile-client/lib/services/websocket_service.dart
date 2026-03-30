@@ -89,12 +89,13 @@ class WebSocketService {
   void _register() {
     _send({
       'type': 'register',
-      'clientType': 'mobile',
-      'userId': userId,
-      'deviceInfo': {
-        'name': deviceName,
-        'platform': Platform.operatingSystem,
-        'version': Platform.operatingSystemVersion,
+      'payload': {
+        'adapterName': 'mobile_client',
+        'adapterVersion': '1.0.0',
+        'userId': userId,
+        'deviceName': deviceName,
+        'supportedEvents': ['message.stream', 'message.complete', 'task.complete', 'approval.request'],
+        'supportedCommands': ['message.send', 'approval.respond'],
       },
     });
   }
