@@ -1,0 +1,247 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'mobile-client/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'mobile-client/**'
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      version:
+        description: '版本号 (例如: 1.0.0)'
+        required: false
+        default: ''
+
+env:
+  FLUTTER_VERSION: '3.16.0'
+  JAVA_VERSION: '17'
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    # 设置 Java
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: gradle
+    
+    # 设置 Flutter
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+    
+    # 显示环境信息
+    - name: Show environment info
+      run: |
+        echo "Flutter version:"
+        flutter --version
+        echo "Java version:"
+        java -version
+        echo "Gradle version:"
+        gradle --version || true
+    
+    # 获取依赖
+    - name: Get Flutter dependencies
+      working-directory: ./mobile-client
+      run: |
+        flutter pub get
+    
+    # 分析代码
+    - name: Analyze code
+      working-directory: ./mobile-client
+      run: flutter analyze
+      continue-on-error: true  # 不中断构建，但会显示警告
+    
+    # 运行测试
+    - name: Run tests
+      working-directory: ./mobile-client
+      run: flutter test
+      continue-on-error: true
+    
+    # 构建 APK (分 ABI 构建，减小体积)
+    - name: Build APK (split per ABI)
+      working-directory: ./mobile-client
+      run: |
+        flutter build apk --split-per-abi --release
+        # 也构建一个通用版本
+        flutter build apk --release
+    
+    # 显示构建输出
+    - name: Show build outputs
+      run: |
+        echo "=== 构建输出 ==="
+        ls -lh mobile-client/build/app/outputs/flutter-apk/
+        echo ""
+        echo "=== APK 文件信息 ==="
+        for apk in mobile-client/build/app/outputs/flutter-apk/*.apk; do
+          echo "文件: $apk"
+          ls -lh "$apk"
+        done
+    
+    # 上传构建产物 - 通用 APK
+    - name: Upload APK (Universal)
+      uses: actions/upload-artifact@v4
+      with:
+        name: kimi-remote-apk-universal
+        path: mobile-client/build/app/outputs/flutter-apk/app-release.apk
+        retention-days: 30
+    
+    # 上传构建产物 - ARM64
+    - name: Upload APK (ARM64)
+      uses: actions/upload-artifact@v4
+      with:
+        name: kimi-remote-apk-arm64
+        path: mobile-client/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        retention-days: 30
+    
+    # 上传构建产物 - ARM32
+    - name: Upload APK (ARM32)
+      uses: actions/upload-artifact@v4
+      with:
+        name: kimi-remote-apk-arm32
+        path: mobile-client/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+        retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    # 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    # 下载构建产物
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    # 显示下载的文件
+    - name: Show downloaded artifacts
+      run: |
+        echo "=== 下载的构建产物 ==="
+        find ./artifacts -name "*.apk" -exec ls -lh {} \;
+    
+    # 生成版本号
+    - name: Generate version
+      id: version
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+        fi
+        echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+    
+    # 创建 Release
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        release_name: Kimi Remote v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## Kimi Remote Android APK
+          
+          ### 版本信息
+          - **版本**: ${{ steps.version.outputs.VERSION }}
+          - **构建日期**: ${{ steps.version.outputs.BUILD_DATE }}
+          - **Flutter**: ${{ env.FLUTTER_VERSION }}
+          - **Java**: ${{ env.JAVA_VERSION }}
+          
+          ### 下载说明
+          
+          **通用版 (Universal)** - 推荐
+          - 支持所有 Android 设备
+          - 文件较大
+          
+          **ARM64 版** - 现代手机推荐
+          - 支持 arm64-v8a 架构
+          - 文件较小，性能更好
+          - 适用于：大部分 2018 年后的手机
+          
+          **ARM32 版** - 旧设备
+          - 支持 armeabi-v7a 架构
+          - 适用于：旧 Android 设备
+          
+          ### 安装方法
+          
+          1. 下载适合你手机的 APK
+          2. 在手机上允许 "安装未知来源应用"
+          3. 点击 APK 文件安装
+          4. 打开应用，配置服务器地址
+          
+          ### 使用方法
+          
+          1. 在电脑上启动 Hub 服务
+          2. 启动 Kimi 适配器
+          3. 手机 App 输入电脑 IP 地址
+          4. 开始远程控制 Kimi！
+          
+          ### 系统要求
+          
+          - Android 5.0 (API 21) 或更高
+          - 网络连接（WiFi 或移动数据）
+          
+          ### 问题反馈
+          
+          如有问题请在 Issues 中反馈。
+        draft: false
+        prerelease: false
+    
+    # 上传通用 APK 到 Release
+    - name: Upload Universal APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/kimi-remote-apk-universal/app-release.apk
+        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-universal.apk
+        asset_content_type: application/vnd.android.package-archive
+    
+    # 上传 ARM64 APK
+    - name: Upload ARM64 APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/kimi-remote-apk-arm64/app-arm64-v8a-release.apk
+        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-arm64.apk
+        asset_content_type: application/vnd.android.package-archive
+    
+    # 上传 ARM32 APK
+    - name: Upload ARM32 APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/kimi-remote-apk-arm32/app-armeabi-v7a-release.apk
+        asset_name: KimiRemote-v${{ steps.version.outputs.VERSION }}-arm32.apk
+        asset_content_type: application/vnd.android.package-archive

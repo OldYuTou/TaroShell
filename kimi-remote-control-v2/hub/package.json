@@ -1,0 +1,25 @@
+{
+  "name": "@ai-remote/hub",
+  "version": "1.0.0",
+  "description": "AI Remote Control Hub - 多适配器推送服务",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ai-remote/adapter-sdk": "file:../adapter-sdk",
+    "ws": "^8.14.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.0"
+  }
+}

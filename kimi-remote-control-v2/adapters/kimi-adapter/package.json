@@ -1,0 +1,20 @@
+{
+  "name": "@ai-remote/adapter-kimi",
+  "version": "1.0.0",
+  "description": "Kimi Code CLI Adapter for AI Remote Control",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ai-remote/adapter-sdk": "file:../../adapter-sdk",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.0"
+  }
+}
