@@ -96,19 +96,32 @@ export class KimiAdapter extends BaseAdapter {
   
   protected onHubConnect(): void {
     console.log('[KimiAdapter] Hub connected');
-    // 只在 Kimi 未运行且不在启动中时才启动
-    if (this.kimiProcess) {
-      console.log('[KimiAdapter] Kimi already running, skipping start');
-      return;
-    }
-    if (this._isStartingKimi) {
-      console.log('[KimiAdapter] Kimi is already starting, skipping');
-      return;
-    }
-    this.startKimiProcess();
     
-    // 启动心跳定时器，保持活跃
-    this._startKeepAlive();
+    // 严格检查：如果 Kimi 已经在运行或正在启动，绝不重复启动
+    if (this.kimiProcess || this._isStartingKimi) {
+      console.log(`[KimiAdapter] Kimi already running (${!!this.kimiProcess}) or starting (${this._isStartingKimi}), skipping start`);
+      return;
+    }
+    
+    // 额外检查：查看是否有其他 kimi web 进程在运行
+    this._checkAndKillExistingKimi().then(() => {
+      this.startKimiProcess();
+      this._startKeepAlive();
+    });
+  }
+  
+  private async _checkAndKillExistingKimi(): Promise<void> {
+    try {
+      // 使用 taskkill 结束所有现有的 kimi web 进程
+      const { exec } = require('child_process');
+      exec('taskkill /F /IM kimi.exe 2>nul || true', (err: any) => {
+        if (!err) {
+          console.log('[KimiAdapter] Killed existing kimi processes');
+        }
+      });
+    } catch (e) {
+      // 忽略错误
+    }
   }
   
   private _startKeepAlive(): void {
@@ -198,24 +211,9 @@ export class KimiAdapter extends BaseAdapter {
       this.kimiProcess = null;
       this._isStartingKimi = false;
       
-      // 只有在 Hub 仍连接且非正常退出时才尝试重启
-      const hubConnected = this.getStatus() === 'connected';
-      const shouldRestart = hubConnected && code !== 0 && code !== null;
-      
-      console.log(`[KimiAdapter] Hub connected: ${hubConnected}, should restart: ${shouldRestart}`);
-      
-      if (shouldRestart) {
-        console.log('[KimiAdapter] Restarting Kimi in 5 seconds...');
-        setTimeout(() => {
-          const stillConnected = this.getStatus() === 'connected';
-          console.log(`[KimiAdapter] Checking restart: stillConnected=${stillConnected}, hasProcess=${!!this.kimiProcess}, isStarting=${this._isStartingKimi}`);
-          if (stillConnected && !this.kimiProcess && !this._isStartingKimi) {
-            this.startKimiProcess();
-          }
-        }, 5000);
-      } else {
-        console.log('[KimiAdapter] Not restarting Kimi');
-      }
+      // 不再自动重启 - 避免反复打开多个窗口
+      console.log('[KimiAdapter] Kimi process ended. Auto-restart is disabled to prevent multiple windows.');
+      console.log('[KimiAdapter] If you need to restart, please restart the adapter manually.');
     });
   }
   
